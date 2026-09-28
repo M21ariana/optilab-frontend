@@ -1,108 +1,82 @@
 import {
   AlertTriangle,
   CalendarClock,
+  ShieldAlert,
+  ThermometerSnowflake,
 } from "lucide-react";
 
 import Link from "next/link";
 
+// ----------------------------------------
+// TYPES
+// ----------------------------------------
+
 export type Notification = {
   id: number;
-  type: "occupancy" | "expiration";
+
+  type:
+    | "occupancy"
+    | "expiration"
+    | "storage"
+    | "hazardous";
+
   title: string;
   description: string;
   time: string;
   href: string;
-  isRead: boolean;
 };
 
 type NotificationItemProps = {
   notification: Notification;
   onNavigate: () => void;
-  onToggleRead: () => void;
 };
+
+// ----------------------------------------
+// COMPONENT
+// ----------------------------------------
 
 export function NotificationItem({
   notification,
   onNavigate,
-  onToggleRead,
 }: NotificationItemProps) {
   const config =
-    notification.type === "expiration"
-      ? {
-          icon: <CalendarClock size={20} />,
-          style: "bg-danger/10 text-danger",
-        }
-      : {
-          icon: <AlertTriangle size={20} />,
-          style: "bg-warning/15 text-warning",
-        };
+    getNotificationConfig(
+      notification.type
+    );
 
   return (
-    <div
-      className={`flex gap-4 border-b border-border px-6 py-5 transition last:border-b-0 ${
-        notification.isRead
-          ? "bg-white"
-          : "bg-accent/[0.04]"
-      }`}
-    >
-      {/* Icono de la alerta */}
+    <div className="flex gap-4 border-b border-border bg-white px-6 py-5 transition last:border-b-0 hover:bg-muted/30">
+      {/* Icon */}
+
       <div
         className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${config.style}`}
       >
         {config.icon}
       </div>
 
-      {/* Contenido */}
+      {/* Content */}
+
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-6">
-          {/* Estado + título */}
-          <div className="flex min-w-0 items-center gap-2">
-            {/* Botón leído / no leído */}
-            <button
-              type="button"
-              onClick={onToggleRead}
-              title={
-                notification.isRead
-                  ? "Marcar como no leída"
-                  : "Marcar como leída"
-              }
-              aria-label={
-                notification.isRead
-                  ? "Marcar como no leída"
-                  : "Marcar como leída"
-              }
-              className="group flex h-5 w-5 shrink-0 items-center justify-center"
-            >
-              <span
-                className={`h-2.5 w-2.5 rounded-full border-2 border-accent transition-all ${
-                  notification.isRead
-                    ? "bg-transparent opacity-40 group-hover:opacity-100"
-                    : "bg-accent group-hover:scale-125"
-                }`}
-              />
-            </button>
+          {/* Title */}
 
-            {/* Título */}
-            <Link
-              href={notification.href}
-              onClick={onNavigate}
-              className={`text-base text-primary transition hover:text-accent ${
-                notification.isRead
-                  ? "font-semibold"
-                  : "font-black"
-              }`}
-            >
-              {notification.title}
-            </Link>
-          </div>
+          <Link
+            href={notification.href}
+            onClick={onNavigate}
+            className="min-w-0 font-black text-primary transition hover:text-accent"
+          >
+            {notification.title}
+          </Link>
 
-          {/* Hora */}
+          {/* Time */}
+
           <span className="shrink-0 text-xs text-secondary">
             {notification.time}
           </span>
         </div>
 
-        {/* Descripción */}
+        {/* Description */}
+
         <Link
           href={notification.href}
           onClick={onNavigate}
@@ -113,17 +87,65 @@ export function NotificationItem({
           </p>
         </Link>
 
-        {/* Estado */}
-        <p
-          className={`mt-2 text-xs font-bold ${
-            notification.isRead
-              ? "text-secondary"
-              : "text-accent"
-          }`}
+        {/* Action */}
+
+        <Link
+          href={notification.href}
+          onClick={onNavigate}
+          className="mt-2 inline-block text-xs font-bold text-accent transition hover:opacity-70"
         >
-          {notification.isRead ? "Leída" : "No leída"}
-        </p>
+          Ver detalle
+        </Link>
       </div>
     </div>
   );
+}
+
+// ----------------------------------------
+// CONFIG
+// ----------------------------------------
+
+function getNotificationConfig(
+  type: Notification["type"]
+) {
+  switch (type) {
+    case "expiration":
+      return {
+        icon: (
+          <CalendarClock size={20} />
+        ),
+        style:
+          "bg-danger/10 text-danger",
+      };
+
+    case "storage":
+      return {
+        icon: (
+          <ThermometerSnowflake
+            size={20}
+          />
+        ),
+        style:
+          "bg-warning/15 text-warning",
+      };
+
+    case "hazardous":
+      return {
+        icon: (
+          <ShieldAlert size={20} />
+        ),
+        style:
+          "bg-danger/10 text-danger",
+      };
+
+    case "occupancy":
+    default:
+      return {
+        icon: (
+          <AlertTriangle size={20} />
+        ),
+        style:
+          "bg-warning/15 text-warning",
+      };
+  }
 }

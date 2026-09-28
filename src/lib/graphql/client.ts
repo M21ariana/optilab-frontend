@@ -21,27 +21,41 @@ type GraphQLResponse<T> = {
 
 export async function graphqlRequest<T>(
   query: string,
-  variables?: Record<string, unknown>
+  variables?: Record<string, unknown>,
+  accessToken?: string
 ): Promise<T> {
-  const response = await fetch(getGraphQLUrl(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-    cache: "no-store",
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
 
-  if (!response.ok) {
-    throw new Error(
-      `GraphQL request failed with status ${response.status}`
-    );
+  if (accessToken) {
+    headers.Authorization =
+      `Bearer ${accessToken}`;
   }
 
-  const result: GraphQLResponse<T> = await response.json();
+  const response = await fetch(
+    getGraphQLUrl(),
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query,
+        variables,
+      }),
+      cache: "no-store",
+    }
+  );
+
+ if (!response.ok) {
+  const errorBody = await response.text();
+
+  throw new Error(
+    `GraphQL request failed with status ${response.status}: ${errorBody}`
+  );
+}
+
+  const result: GraphQLResponse<T> =
+    await response.json();
 
   if (result.errors?.length) {
     throw new Error(

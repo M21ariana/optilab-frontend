@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CriticalLocationsTable } from "@/components/reports/CriticalLocationsTable";
 import { ExpirationChart } from "@/components/reports/ExpirationChart";
@@ -6,6 +8,7 @@ import { MovementTrendChart } from "@/components/reports/MovementTrendChart";
 import { OccupancyChart } from "@/components/reports/OccupancyChart";
 import { SampleTypesChart } from "@/components/reports/SampleTypesChart";
 import { MetricCard } from "@/components/ui/MetricCard";
+
 import {
     AlertTriangle,
     Boxes,
@@ -13,11 +16,67 @@ import {
     History,
 } from "lucide-react";
 
-export default function ReportsPage() {
+import { auth0 } from "@/lib/auth0";
+import { graphqlRequest } from "@/lib/graphql/client";
+
+import {
+    REPORTS_DASHBOARD_QUERY,
+    type ReportsDashboardResponse,
+} from "@/lib/graphql/reports";
+
+// ----------------------------------------
+// PAGE
+// ----------------------------------------
+
+export default async function ReportsPage() {
+    // ----------------------------------------
+    // AUTH
+    // ----------------------------------------
+
+    const session =
+        await auth0.getSession();
+
+    if (!session) {
+        redirect(
+            "/auth/login?returnTo=/reports"
+        );
+    }
+
+    const { token } =
+        await auth0.getAccessToken();
+
+    if (!token) {
+        throw new Error(
+            "Could not obtain an Auth0 access token."
+        );
+    }
+
+    // ----------------------------------------
+    // REPORT DATA
+    // ----------------------------------------
+
+    const {
+        reportsDashboard,
+    } =
+        await graphqlRequest<ReportsDashboardResponse>(
+            REPORTS_DASHBOARD_QUERY,
+            {},
+            token
+        );
+
+    const {
+        summary,
+    } = reportsDashboard;
+
+    // ----------------------------------------
+    // RENDER
+    // ----------------------------------------
+
     return (
         <AppLayout>
             <div className="space-y-8">
                 {/* Header */}
+
                 <section>
                     <p className="text-sm font-bold uppercase tracking-[0.25em] text-accent">
                         Analítica
@@ -28,17 +87,21 @@ export default function ReportsPage() {
                     </h1>
 
                     <p className="mt-2 max-w-3xl text-secondary">
-                        Analiza la ocupación del laboratorio, la distribución del
-                        inventario, los movimientos de muestras y los próximos
+                        Analiza la ocupación del laboratorio,
+                        la distribución del inventario, los
+                        movimientos de muestras y los próximos
                         vencimientos.
                     </p>
                 </section>
 
                 {/* Summary metrics */}
+
                 <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
                     <MetricCard
                         title="Ocupación general"
-                        value="70%"
+                        value={`${summary.overallOccupancy.toFixed(
+                            1
+                        )}%`}
                         subtitle="Capacidad utilizada"
                         icon={<Boxes size={20} />}
                         compact
@@ -46,15 +109,19 @@ export default function ReportsPage() {
 
                     <MetricCard
                         title="Muestras activas"
-                        value="248"
+                        value={summary.activeSamples.toString()}
                         subtitle="En inventario"
-                        icon={<FlaskConical size={20} />}
+                        icon={
+                            <FlaskConical
+                                size={20}
+                            />
+                        }
                         compact
                     />
 
                     <MetricCard
                         title="Movimientos"
-                        value="118"
+                        value={summary.movementsLast30Days.toString()}
                         subtitle="Últimos 30 días"
                         icon={<History size={20} />}
                         compact
@@ -62,44 +129,76 @@ export default function ReportsPage() {
 
                     <MetricCard
                         title="Alertas críticas"
-                        value="5"
+                        value={summary.criticalAlerts.toString()}
                         subtitle="Requieren atención"
-                        icon={<AlertTriangle size={20} />}
+                        icon={
+                            <AlertTriangle
+                                size={20}
+                            />
+                        }
                         variant="warning"
                         compact
                     />
                 </section>
 
                 {/* Occupancy + sample types */}
+
                 <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.25fr_0.75fr]">
                     <div className="min-w-0">
-                        <OccupancyChart />
+                        <OccupancyChart
+                            data={
+                                reportsDashboard
+                                    .occupancyByLocation
+                            }
+                        />
                     </div>
 
                     <div className="min-w-0">
-                        <SampleTypesChart />
+                        <SampleTypesChart
+                            data={
+                                reportsDashboard
+                                    .samplesByMaterialType
+                            }
+                        />
                     </div>
                 </section>
 
                 {/* Movement analytics */}
+
                 <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                     <div className="min-w-0">
-                        <MovementTrendChart />
+                        <MovementTrendChart
+                            data={
+                                reportsDashboard.movementTrend
+                            }
+                        />
                     </div>
 
                     <div className="min-w-0">
-                        <InventoryFlowChart />
+                        <InventoryFlowChart
+                            data={
+                                reportsDashboard.inventoryFlow
+                            }
+                        />
                     </div>
                 </section>
 
                 {/* Expirations */}
+
                 <section className="min-w-0">
-                    <ExpirationChart />
+                    <ExpirationChart
+                        data={reportsDashboard.expirations}
+                    />
                 </section>
 
                 {/* Critical locations */}
+
                 <section>
-                    <CriticalLocationsTable />
+                    <CriticalLocationsTable
+                        data={
+                            reportsDashboard.criticalLocations
+                        }
+                    />
                 </section>
             </div>
         </AppLayout>

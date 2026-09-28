@@ -5,6 +5,7 @@ type MetricCardProps = {
   subtitle?: string;
   variant?: "default" | "warning" | "danger";
   compact?: boolean;
+  interactive?: boolean;
 };
 
 export function MetricCard({
@@ -14,6 +15,7 @@ export function MetricCard({
   subtitle,
   variant = "default",
   compact = false,
+  interactive = true,
 }: MetricCardProps) {
   const iconStyles = {
     default: "bg-accent/10 text-accent",
@@ -23,9 +25,11 @@ export function MetricCard({
 
   return (
     <div
-      className={`rounded-3xl border border-border bg-surface shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-        compact ? "p-4" : "p-6"
-      }`}
+      className={`rounded-3xl border border-border bg-surface shadow-sm ${
+        interactive
+          ? "transition hover:-translate-y-0.5 hover:shadow-md"
+          : ""
+      } ${compact ? "p-4" : "p-6"}`}
     >
       <div
         className={`flex items-center justify-center rounded-2xl ${
@@ -37,7 +41,9 @@ export function MetricCard({
 
       <p
         className={`font-bold text-secondary ${
-          compact ? "mt-3 text-xs" : "mt-5 text-sm"
+          compact
+            ? "mt-3 text-xs"
+            : "mt-5 text-sm"
         }`}
       >
         {title}
@@ -45,7 +51,9 @@ export function MetricCard({
 
       <p
         className={`font-black text-primary ${
-          compact ? "mt-1 text-2xl" : "mt-2 text-4xl"
+          compact
+            ? "mt-1 text-2xl"
+            : "mt-2 text-4xl"
         }`}
       >
         {value}
@@ -54,7 +62,9 @@ export function MetricCard({
       {subtitle && (
         <p
           className={`text-secondary ${
-            compact ? "mt-1 text-xs" : "mt-4 text-sm"
+            compact
+              ? "mt-1 text-xs"
+              : "mt-4 text-sm"
           }`}
         >
           {subtitle}

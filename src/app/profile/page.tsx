@@ -1,5 +1,14 @@
+import { redirect } from "next/navigation";
+
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+
+import { auth0 } from "@/lib/auth0";
+import { graphqlRequest } from "@/lib/graphql/client";
+import {
+  ME_QUERY,
+  MeResponse,
+} from "@/lib/graphql/profile";
 
 import {
   Building2,
@@ -8,14 +17,48 @@ import {
   UserCircle2,
 } from "lucide-react";
 
-const user = {
-  fullName: "María González",
-  email: "maria.gonzalez@optilab.com",
-  role: "Administrador",
-  organization: "OptiLab",
-};
+export default async function ProfilePage() {
+  // 1. Confirm that the user has an Auth0 session
+  const session = await auth0.getSession();
 
-export default function ProfilePage() {
+  if (!session) {
+    redirect("/auth/login?returnTo=/profile");
+  }
+
+  // 2. Get an access token for the OptiLab API
+  const { token } = await auth0.getAccessToken();
+
+  if (!token) {
+    throw new Error(
+      "Could not obtain an Auth0 access token."
+    );
+  }
+
+  // 3. Request the authenticated OptiLab user
+  const { me } = await graphqlRequest<MeResponse>(
+    ME_QUERY,
+    undefined,
+    token
+  );
+
+  if (!me) {
+    throw new Error(
+      "Authenticated user was not found in OptiLab."
+    );
+  }
+
+  // 4. Adapt backend data to the current UI
+  const user = {
+    fullName:
+      me.fullName || "Nombre pendiente",
+    email: me.email,
+    role:
+      me.role || "Sin rol asignado",
+    organization:
+      me.organization?.name ||
+      "Sin organización asignada",
+  };
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-5xl space-y-8">
@@ -30,8 +73,8 @@ export default function ProfilePage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-secondary">
-            Consulta y actualiza la información asociada a tu cuenta de
-            OptiLab.
+            Consulta y actualiza la información
+            asociada a tu cuenta de OptiLab.
           </p>
         </section>
 

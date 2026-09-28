@@ -1,82 +1,40 @@
+import {
+  redirect,
+  notFound,
+} from "next/navigation";
+
 import { AppLayout } from "@/components/layout/AppLayout";
+
 import { SampleWorkspace } from "@/components/samples/SampleWorkspace";
-import type { SampleData } from "@/components/samples/types";
-import { notFound } from "next/navigation";
 
-const samples: Record<string, SampleData> = {
-  "RES-001": {
-    id: "RES-001",
+import type {
+  SampleData,
+} from "@/components/samples/types";
 
-    name: "Muestra Resina A",
-    code: "RES-001",
-    type: "Resina",
+import { auth0 } from "@/lib/auth0";
 
-    description:
-      "Muestra de resina utilizada para pruebas de comportamiento y estabilidad.",
+import {
+  graphqlRequest,
+} from "@/lib/graphql/client";
 
-    weight: "500",
-    volume: "2400",
-    area: "720",
+import {
+  SAMPLE_QUERY,
+  STORAGE_RECOMMENDATIONS_QUERY,
+  type SampleResponse,
+  type StorageRecommendationsResponse,
+} from "@/lib/graphql/samples";
 
-    entryDate: "2026-07-15",
-    expirationDate: "2026-09-02",
+import {
+  LABORATORIES_QUERY,
+  MATERIAL_TYPES_QUERY,
+  type LaboratoriesResponse,
+  type MaterialTypesResponse,
+} from "@/lib/graphql/sampleOptions";
 
-    status: "ACTIVE",
-
-    locationId: "a1",
-    locationCode: "A1",
-    locationName: "Estantería A - Nivel superior",
-  },
-
-  "POL-014": {
-    id: "POL-014",
-
-    name: "Polímero Experimental B",
-    code: "POL-014",
-    type: "Polímero",
-
-    description:
-      "Polímero utilizado en pruebas experimentales de materiales.",
-
-    weight: "350",
-    volume: "1800",
-    area: "540",
-
-    entryDate: "2026-07-22",
-    expirationDate: "",
-
-    status: "ACTIVE",
-
-    locationId: "a2",
-    locationCode: "A2",
-    locationName: "Estantería A - Nivel medio",
-  },
-
-  "CHE-220": {
-    id: "CHE-220",
-
-    name: "Solución Química C",
-    code: "CHE-220",
-    type: "Sustancia química",
-
-    description:
-      "Solución utilizada para análisis y pruebas químicas.",
-
-    weight: "120",
-    volume: "900",
-    area: "280",
-
-    entryDate: "2026-06-15",
-    expirationDate: "2026-08-28",
-
-    status: "ARCHIVED",
-
-    locationId: "g1",
-    locationCode: "G1",
-    locationName:
-      "Gabinete químico - Compartimiento superior",
-  },
-};
+import {
+  ME_QUERY,
+  type MeResponse,
+} from "@/lib/graphql/profile";
 
 export default async function SamplePage({
   params,
@@ -87,27 +45,290 @@ export default async function SamplePage({
 }) {
   const { id } = await params;
 
-  const isNew = id.toLowerCase() === "new";
+  // ----------------------------------------
+  // MODE
+  // ----------------------------------------
+
+  const isNew =
+    id.toLowerCase() === "new";
+
+  // ----------------------------------------
+  // AUTH
+  // ----------------------------------------
+
+  const session =
+    await auth0.getSession();
+
+  if (!session) {
+    redirect(
+      `/auth/login?returnTo=/samples/${id}`
+    );
+  }
+
+  const { token } =
+    await auth0.getAccessToken();
+
+  if (!token) {
+    throw new Error(
+      "Could not obtain an Auth0 access token."
+    );
+  }
+
+  // ----------------------------------------
+  // CURRENT USER
+  // ----------------------------------------
+
+  const {
+    me,
+  } = await graphqlRequest<MeResponse>(
+    ME_QUERY,
+    {},
+    token
+  );
+
+  if (!me) {
+    throw new Error(
+      "Could not load the current user."
+    );
+  }
+
+  // ----------------------------------------
+  // MATERIAL TYPES
+  // Used in both create and edit modes
+  // ----------------------------------------
+
+  const {
+    materialTypes,
+  } =
+    await graphqlRequest<MaterialTypesResponse>(
+      MATERIAL_TYPES_QUERY,
+      {},
+      token
+    );
+
+  const materialTypeOptions =
+    materialTypes.data ?? [];
+
+  // ----------------------------------------
+  // NEW SAMPLE
+  // ----------------------------------------
 
   if (isNew) {
+    if (!me.organization) {
+      throw new Error(
+        "The current user does not belong to an organization."
+      );
+    }
+
+    // ----------------------------------------
+    // LABORATORIES
+    // Only laboratories from the user's
+    // organization should be available.
+    // ----------------------------------------
+
+    const {
+      laboratories,
+    } =
+      await graphqlRequest<LaboratoriesResponse>(
+        LABORATORIES_QUERY,
+        {
+          where: {
+            organizationId: {
+              equals: Number(
+                me.organization.id
+              ),
+            },
+          },
+        },
+        token
+      );
+
+    const laboratoryOptions =
+      laboratories.data ?? [];
+
     return (
       <AppLayout>
-        <SampleWorkspace isNew />
+        <SampleWorkspace
+          isNew
+          laboratories={
+            laboratoryOptions
+          }
+          materialTypes={
+            materialTypeOptions
+          }
+        />
       </AppLayout>
     );
   }
 
-  const sample = samples[id];
+  // ----------------------------------------
+  // VALIDATE SAMPLE ID
+  // ----------------------------------------
+
+  const numericId = Number(id);
+
+  if (Number.isNaN(numericId)) {
+    notFound();
+  }
+
+  // ----------------------------------------
+  // GET SAMPLE
+  // ----------------------------------------
+
+  const {
+    sample,
+  } =
+    await graphqlRequest<SampleResponse>(
+      SAMPLE_QUERY,
+      {
+        id: numericId,
+      },
+      token
+    );
 
   if (!sample) {
     notFound();
   }
 
+  // ----------------------------------------
+  // GET STORAGE RECOMMENDATIONS
+  // ----------------------------------------
+
+  const {
+    recommendedStorageLocations,
+  } =
+    await graphqlRequest<StorageRecommendationsResponse>(
+      STORAGE_RECOMMENDATIONS_QUERY,
+      {
+        sampleId: numericId,
+      },
+      token
+    );
+
+  // ----------------------------------------
+  // ADAPT API -> UI
+  // ----------------------------------------
+
+  const sampleData: SampleData = {
+    // ----------------------------------------
+    // IDENTIFIERS
+    // ----------------------------------------
+
+    id: String(sample.id),
+
+    laboratoryId:
+      sample.laboratoryId,
+
+    materialTypeId:
+      sample.materialTypeId,
+
+    // ----------------------------------------
+    // GENERAL DATA
+    // ----------------------------------------
+
+    name:
+      sample.name,
+
+    code:
+      sample.code,
+
+    type:
+      sample.materialType.name,
+
+    description:
+      sample.description ?? "",
+
+    status:
+      sample.status,
+
+    // ----------------------------------------
+    // PHYSICAL DATA
+    // ----------------------------------------
+
+    weight:
+      String(sample.weightG),
+
+    volume:
+      String(sample.volumeCm3),
+
+    area:
+      String(sample.areaCm2),
+
+    // ----------------------------------------
+    // DATES
+    // input[type="date"] requires YYYY-MM-DD
+    // ----------------------------------------
+
+    entryDate:
+      sample.entryDate
+        ? sample.entryDate.slice(
+            0,
+            10
+          )
+        : "",
+
+    expirationDate:
+      sample.expirationDate
+        ? sample.expirationDate.slice(
+            0,
+            10
+          )
+        : "",
+
+    // ----------------------------------------
+    // STORAGE REQUIREMENTS
+    // ----------------------------------------
+
+    isStackable:
+      sample.isStackable,
+
+    maxStackUnits:
+      sample.maxStackUnits,
+
+    requiresColdStorage:
+      sample.requiresColdStorage,
+
+    requiresLightProtection:
+      sample.requiresLightProtection,
+
+    isHazardous:
+      sample.isHazardous,
+
+    // ----------------------------------------
+    // CURRENT LOCATION
+    // ----------------------------------------
+
+    locationId:
+      sample.storageLocation
+        ? String(
+            sample.storageLocation.id
+          )
+        : "",
+
+    locationCode:
+      sample.storageLocation?.code ??
+      "",
+
+    locationName:
+      sample.storageLocation?.name ??
+      "Sin ubicación",
+  };
+
+  // ----------------------------------------
+  // RENDER EDIT MODE
+  // ----------------------------------------
+
   return (
     <AppLayout>
       <SampleWorkspace
         isNew={false}
-        initialData={sample}
+        initialData={sampleData}
+        recommendations={
+          recommendedStorageLocations
+        }
+        materialTypes={
+          materialTypeOptions
+        }
       />
     </AppLayout>
   );

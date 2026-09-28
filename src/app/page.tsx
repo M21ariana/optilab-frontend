@@ -65,16 +65,6 @@ export default function HomePage() {
               fácil de usar.
             </p>
 
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Link
-                href="/login"
-                className="flex items-center gap-3 rounded-xl bg-accent px-7 py-4 text-base font-extrabold text-white shadow-xl shadow-accent/20 transition hover:-translate-y-0.5 hover:opacity-90"
-              >
-                <FlaskConical size={20} />
-                Entrar al sistema
-              </Link>
-            </div>
-
             <div className="mt-12 grid max-w-2xl grid-cols-1 gap-5 sm:grid-cols-3">
               <MiniTrustItem
                 icon={<ShieldCheck size={26} />}

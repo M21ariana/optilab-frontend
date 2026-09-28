@@ -1,15 +1,20 @@
 "use client";
 
-import { Bell, UserCircle2 } from "lucide-react";
+import {
+  Bell,
+  UserCircle2,
+} from "lucide-react";
+
 import Link from "next/link";
 import { useState } from "react";
 
-import { LaboratoryDropdown } from "./LaboratoryDropdown";
 import { NotificationsModal } from "./NotificationsModal";
 
 export function Topbar() {
-  const [isNotificationsOpen, setIsNotificationsOpen] =
-    useState(false);
+  const [
+    isNotificationsOpen,
+    setIsNotificationsOpen,
+  ] = useState(false);
 
   return (
     <>
@@ -27,13 +32,12 @@ export function Topbar() {
 
         {/* Actions */}
         <div className="flex items-center gap-4">
-          {/* Laboratory selector */}
-          <LaboratoryDropdown />
-
           {/* Notifications */}
           <button
             type="button"
-            onClick={() => setIsNotificationsOpen(true)}
+            onClick={() =>
+              setIsNotificationsOpen(true)
+            }
             className="relative rounded-2xl border border-border bg-white p-3 shadow-sm transition hover:border-accent"
             aria-label="Abrir notificaciones"
           >
@@ -71,7 +75,9 @@ export function Topbar() {
       {/* Notifications modal */}
       <NotificationsModal
         isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
+        onClose={() =>
+          setIsNotificationsOpen(false)
+        }
       />
     </>
   );

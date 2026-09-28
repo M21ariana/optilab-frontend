@@ -7,9 +7,12 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { ReadOnlyField } from "./ReadOnlyField";
+import { updateProfileAction } from "@/app/profile/actions";
 
 type ProfileFormProps = {
   initialData: {
@@ -23,23 +26,64 @@ type ProfileFormProps = {
 export function ProfileForm({
   initialData,
 }: ProfileFormProps) {
+  const router = useRouter();
+
   const [fullName, setFullName] = useState(
     initialData.fullName
   );
 
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(
+    null
+  );
 
-  function handleSubmit(
+  async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    // Temporal hasta conectar el backend
-    setSaved(true);
+    setSaved(false);
+    setError(null);
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 2500);
+    const normalizedName = fullName.trim();
+
+    if (!normalizedName) {
+      setError(
+        "El nombre no puede estar vacío."
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const updatedUser =
+        await updateProfileAction(
+          normalizedName
+        );
+
+      setFullName(
+        updatedUser.fullName ??
+          normalizedName
+      );
+
+      setSaved(true);
+
+      router.refresh();
+
+      setTimeout(() => {
+        setSaved(false);
+      }, 2500);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar los cambios."
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -64,7 +108,7 @@ export function ProfileForm({
 
       {/* Form fields */}
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Nombre completo - EDITABLE */}
+        {/* Nombre completo */}
         <label className="block">
           <span className="mb-2 block text-sm font-bold text-primary">
             Nombre completo
@@ -79,30 +123,34 @@ export function ProfileForm({
             <input
               type="text"
               value={fullName}
+              disabled={saving}
               onChange={(event) => {
-                setFullName(event.target.value);
+                setFullName(
+                  event.target.value
+                );
                 setSaved(false);
+                setError(null);
               }}
-              className="w-full bg-transparent text-sm font-medium text-primary outline-none"
+              className="w-full bg-transparent text-sm font-medium text-primary outline-none disabled:opacity-60"
             />
           </div>
         </label>
 
-        {/* Correo electrónico - SOLO LECTURA */}
+        {/* Correo electrónico */}
         <ReadOnlyField
           label="Correo electrónico"
           value={initialData.email}
           icon={<Mail size={18} />}
         />
 
-        {/* Organización - SOLO LECTURA */}
+        {/* Organización */}
         <ReadOnlyField
           label="Organización"
           value={initialData.organization}
           icon={<Building2 size={18} />}
         />
 
-        {/* Rol - SOLO LECTURA */}
+        {/* Rol */}
         <ReadOnlyField
           label="Rol"
           value={initialData.role}
@@ -112,22 +160,30 @@ export function ProfileForm({
 
       {/* Footer */}
       <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
-        {/* Mensaje de confirmación */}
         <div>
           {saved && (
             <p className="text-sm font-bold text-accent">
               Cambios guardados correctamente.
             </p>
           )}
+
+          {error && (
+            <p className="text-sm font-bold text-red-600">
+              {error}
+            </p>
+          )}
         </div>
 
-        {/* Guardar */}
         <button
           type="submit"
-          className="flex items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-accent/20 transition hover:opacity-90"
+          disabled={saving}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-accent px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-accent/20 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Save size={18} />
-          Guardar cambios
+
+          {saving
+            ? "Guardando..."
+            : "Guardar cambios"}
         </button>
       </div>
     </form>

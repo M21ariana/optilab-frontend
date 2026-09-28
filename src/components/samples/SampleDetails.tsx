@@ -3,21 +3,42 @@ import {
   Edit3,
   FlaskConical,
   MapPin,
+  MoveRight,
   Scale,
 } from "lucide-react";
 import Link from "next/link";
 
+import { formatDate } from "@/lib/utils/date";
+
 import type { SampleData } from "./types";
+
+// ======================================================
+// TYPES
+// ======================================================
 
 type SampleDetailsProps = {
   sample: SampleData;
   onEdit: () => void;
+  onMove: () => void;
 };
+
+// ======================================================
+// COMPONENT
+// ======================================================
 
 export function SampleDetails({
   sample,
   onEdit,
+  onMove,
 }: SampleDetailsProps) {
+  const hasLocation = Boolean(
+    sample.locationId
+  );
+
+  const canMove =
+    sample.status === "ACTIVE" &&
+    hasLocation;
+
   return (
     <div className="space-y-6">
       {/* Main data */}
@@ -77,44 +98,84 @@ export function SampleDetails({
         <DetailCard
           label="Volumen"
           value={`${sample.volume} cm³`}
-          icon={<FlaskConical size={19} />}
+          icon={
+            <FlaskConical size={19} />
+          }
         />
 
         <DetailCard
           label="Área ocupada"
           value={`${sample.area} cm²`}
-          icon={<FlaskConical size={19} />}
+          icon={
+            <FlaskConical size={19} />
+          }
         />
       </section>
 
       {/* Location */}
       <section className="rounded-3xl border border-border bg-surface p-6 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">
-          Almacenamiento
-        </p>
-
-        <h2 className="mt-2 text-xl font-black text-primary">
-          Ubicación actual
-        </h2>
-
-        <Link
-          href={`/locations/${sample.locationId}`}
-          className="mt-5 flex items-center gap-4 rounded-2xl border border-border bg-white p-4 transition hover:border-accent"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
-            <MapPin size={19} />
-          </div>
-
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="font-black text-primary">
-              {sample.locationCode}
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">
+              Almacenamiento
             </p>
 
-            <p className="mt-1 text-sm text-secondary">
-              {sample.locationName}
-            </p>
+            <h2 className="mt-2 text-xl font-black text-primary">
+              Ubicación actual
+            </h2>
           </div>
-        </Link>
+
+          {canMove && (
+            <button
+              type="button"
+              onClick={onMove}
+              className="flex w-fit items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+            >
+              <MoveRight size={18} />
+              Mover muestra
+            </button>
+          )}
+        </div>
+
+        {hasLocation ? (
+          <Link
+            href={`/locations/${sample.locationId}`}
+            className="mt-5 flex items-center gap-4 rounded-2xl border border-border bg-white p-4 transition hover:border-accent"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <MapPin size={19} />
+            </div>
+
+            <div>
+              <p className="font-black text-primary">
+                {sample.locationCode}
+              </p>
+
+              <p className="mt-1 text-sm text-secondary">
+                {sample.locationName}
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <div className="mt-5 flex items-center gap-4 rounded-2xl border border-dashed border-border bg-white p-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-secondary">
+              <MapPin size={19} />
+            </div>
+
+            <div>
+              <p className="font-bold text-primary">
+                Sin ubicación asignada
+              </p>
+
+              <p className="mt-1 text-sm text-secondary">
+                Esta muestra no se
+                encuentra actualmente
+                almacenada en una
+                ubicación.
+              </p>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Dates */}
@@ -136,7 +197,9 @@ export function SampleDetails({
               </p>
 
               <p className="mt-1 font-bold text-primary">
-                {sample.entryDate}
+                {formatDate(
+                  sample.entryDate
+                )}
               </p>
             </div>
           </div>
@@ -153,7 +216,9 @@ export function SampleDetails({
               </p>
 
               <p className="mt-1 font-bold text-primary">
-                {sample.expirationDate || "No aplica"}
+                {formatDate(
+                  sample.expirationDate
+                ) || "-"}
               </p>
             </div>
           </div>
@@ -162,6 +227,10 @@ export function SampleDetails({
     </div>
   );
 }
+
+// ======================================================
+// DETAIL CARD
+// ======================================================
 
 function DetailCard({
   label,

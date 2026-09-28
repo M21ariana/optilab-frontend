@@ -1,61 +1,127 @@
+import Link from "next/link";
+
+import {
+  ArrowLeft,
+  Biohazard,
+  Edit3,
+  FlaskConical,
+  LightbulbOff,
+  MapPin,
+  PackageOpen,
+  Refrigerator,
+  Scale,
+} from "lucide-react";
+
+import {
+  notFound,
+  redirect,
+} from "next/navigation";
+
 import { AppLayout } from "@/components/layout/AppLayout";
 import { OccupancyBadge } from "@/components/locations/OccupancyBadge";
 import { ProgressBar } from "@/components/locations/ProgressBar";
-import Link from "next/link";
-import {
-  ArrowLeft,
-  Edit3,
-  FlaskConical,
-  MapPin,
-  PackageOpen,
-  Scale,
-  Warehouse,
-} from "lucide-react";
 
-const location = {
-  id: "a1",
-  code: "A1",
-  name: "Estantería A - Nivel superior",
-  type: "Estantería",
-  description:
-    "Ubicación destinada a muestras sólidas y materiales estables a temperatura ambiente.",
-  allowedTypes: ["Resina", "Polímero"],
-  maxVolume: "20,000 cm³",
-  maxArea: "5,000 cm²",
-  maxWeight: "15,000 g",
-  sampleCount: 8,
-  capacity: 10,
-  occupancy: 80,
+import { auth0 } from "@/lib/auth0";
+import { graphqlRequest } from "@/lib/graphql/client";
+
+import {
+  STORAGE_LOCATION_QUERY,
+  type StorageLocationResponse,
+} from "@/lib/graphql/locations";
+
+type LocationDetailPageProps = {
+  params: Promise<{
+    id: string;
+  }>;
 };
 
-const samples = [
-  {
-    code: "RES-001",
-    name: "Muestra Resina A",
-    type: "Resina",
-    weight: "500 g",
-  },
-  {
-    code: "RES-014",
-    name: "Resina Experimental B",
-    type: "Resina",
-    weight: "350 g",
-  },
-  {
-    code: "POL-008",
-    name: "Polímero Técnico A",
-    type: "Polímero",
-    weight: "620 g",
-  },
-];
+export default async function LocationDetailPage({
+  params,
+}: LocationDetailPageProps) {
+  // ----------------------------------------
+  // PARAMS
+  // ----------------------------------------
 
-export default function LocationDetailPage() {
-  const availableSpaces = location.capacity - location.sampleCount;
+  const { id } = await params;
+
+  const numericId = Number(id);
+
+  if (Number.isNaN(numericId)) {
+    notFound();
+  }
+
+  // ----------------------------------------
+  // AUTH
+  // ----------------------------------------
+
+  const session =
+    await auth0.getSession();
+
+  if (!session) {
+    redirect(
+      `/auth/login?returnTo=/locations/${id}`
+    );
+  }
+
+  const { token } =
+    await auth0.getAccessToken();
+
+  if (!token) {
+    throw new Error(
+      "Could not obtain an Auth0 access token."
+    );
+  }
+
+  // ----------------------------------------
+  // LOCATION
+  // ----------------------------------------
+
+  const {
+    storageLocation: location,
+  } =
+    await graphqlRequest<StorageLocationResponse>(
+      STORAGE_LOCATION_QUERY,
+      {
+        id: numericId,
+      },
+      token
+    );
+
+  if (!location) {
+    notFound();
+  }
+
+  // ----------------------------------------
+  // CALCULATIONS
+  // ----------------------------------------
+
+  const maxArea =
+    location.maxAreaCm2 ?? 0;
+
+  const usedArea =
+    location.usedAreaCm2;
+
+  const availableArea =
+    Math.max(
+      maxArea - usedArea,
+      0
+    );
+
+  const activeSamples =
+    location.samples.filter(
+      (sample) =>
+        sample.status !== "REMOVED"
+    );
+
+  // ----------------------------------------
+  // RENDER
+  // ----------------------------------------
 
   return (
     <AppLayout>
       <div className="space-y-8">
         {/* Header */}
+
         <section>
           <Link
             href="/locations"
@@ -76,16 +142,26 @@ export default function LocationDetailPage() {
                   {location.type}
                 </span>
 
-                <OccupancyBadge occupancy={location.occupancy} />
+                <OccupancyBadge
+                  occupancy={
+                    location.occupancy
+                  }
+                />
               </div>
 
               <h1 className="mt-3 text-4xl font-black text-primary">
                 {location.name}
               </h1>
 
-              <p className="mt-3 max-w-3xl leading-7 text-secondary">
-                {location.description}
+              <p className="mt-2 text-sm font-bold uppercase tracking-wide text-secondary">
+                {location.laboratory.name}
               </p>
+
+              {location.description && (
+                <p className="mt-3 max-w-3xl leading-7 text-secondary">
+                  {location.description}
+                </p>
+              )}
             </div>
 
             <Link
@@ -98,34 +174,51 @@ export default function LocationDetailPage() {
           </div>
         </section>
 
-        {/* Summary metrics */}
+        {/* Summary */}
+
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <DetailMetric
-            icon={<FlaskConical size={21} />}
+            icon={
+              <FlaskConical size={21} />
+            }
             label="Muestras almacenadas"
             value={location.sampleCount.toString()}
           />
 
           <DetailMetric
-            icon={<PackageOpen size={21} />}
-            label="Espacios disponibles"
-            value={availableSpaces.toString()}
-          />
-
-          <DetailMetric
-            icon={<Warehouse size={21} />}
-            label="Capacidad total"
-            value={location.capacity.toString()}
+            icon={
+              <PackageOpen size={21} />
+            }
+            label="Área utilizada"
+            value={`${formatNumber(
+              usedArea
+            )} cm²`}
           />
 
           <DetailMetric
             icon={<MapPin size={21} />}
+            label="Área disponible"
+            value={
+              location.maxAreaCm2 !==
+              null
+                ? `${formatNumber(
+                    availableArea
+                  )} cm²`
+                : "Sin límite"
+            }
+          />
+
+          <DetailMetric
+            icon={<Scale size={21} />}
             label="Ocupación"
-            value={`${location.occupancy}%`}
+            value={`${location.occupancy.toFixed(
+              1
+            )}%`}
           />
         </section>
 
-        {/* Capacity + allowed types */}
+        {/* Capacity */}
+
         <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm">
             <h2 className="text-xl font-black text-primary">
@@ -135,60 +228,115 @@ export default function LocationDetailPage() {
             <div className="mt-6">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-secondary">
-                  Ocupación actual
+                  Ocupación por área
                 </span>
 
                 <span className="text-sm font-black text-primary">
-                  {location.occupancy}%
+                  {location.occupancy.toFixed(
+                    1
+                  )}
+                  %
                 </span>
               </div>
 
-              <ProgressBar occupancy={location.occupancy} />
+              <ProgressBar
+                occupancy={
+                  location.occupancy
+                }
+              />
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <CapacityItem
                 label="Volumen máximo"
-                value={location.maxVolume}
+                value={
+                  location.maxVolumeCm3 !==
+                  null
+                    ? `${formatNumber(
+                        location.maxVolumeCm3
+                      )} cm³`
+                    : "Sin definir"
+                }
               />
 
               <CapacityItem
                 label="Área máxima"
-                value={location.maxArea}
+                value={
+                  location.maxAreaCm2 !==
+                  null
+                    ? `${formatNumber(
+                        location.maxAreaCm2
+                      )} cm²`
+                    : "Sin definir"
+                }
               />
 
               <CapacityItem
                 label="Peso máximo"
-                value={location.maxWeight}
-                icon={<Scale size={18} />}
+                value={
+                  location.maxWeightG !==
+                  null
+                    ? `${formatNumber(
+                        location.maxWeightG
+                      )} g`
+                    : "Sin definir"
+                }
               />
             </div>
           </div>
 
+          {/* Storage conditions */}
+
           <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm">
             <h2 className="text-xl font-black text-primary">
-              Tipos de muestra permitidos
+              Condiciones de almacenamiento
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-secondary">
-              Esta ubicación está configurada para recibir los siguientes tipos
-              de muestra.
+              Capacidades especiales disponibles
+              en esta ubicación.
             </p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              {location.allowedTypes.map((type) => (
-                <span
-                  key={type}
-                  className="rounded-full bg-accent/10 px-4 py-2 text-sm font-bold text-accent"
-                >
-                  {type}
-                </span>
-              ))}
+            <div className="mt-6 space-y-3">
+              <ConditionItem
+                icon={
+                  <Refrigerator
+                    size={18}
+                  />
+                }
+                label="Almacenamiento refrigerado"
+                enabled={
+                  location.supportsColdStorage
+                }
+              />
+
+              <ConditionItem
+                icon={
+                  <LightbulbOff
+                    size={18}
+                  />
+                }
+                label="Protección contra la luz"
+                enabled={
+                  location.supportsLightProtection
+                }
+              />
+
+              <ConditionItem
+                icon={
+                  <Biohazard size={18} />
+                }
+                label="Materiales peligrosos"
+                enabled={
+                  location.supportsHazardous
+                }
+              />
             </div>
           </div>
         </section>
 
         {/* Samples */}
+
         <section className="rounded-3xl border border-border bg-surface p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-black text-primary">
@@ -196,55 +344,120 @@ export default function LocationDetailPage() {
             </h2>
 
             <p className="mt-2 text-sm text-secondary">
-              Muestras asignadas actualmente a esta ubicación.
+              Muestras asignadas actualmente a
+              esta ubicación.
             </p>
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-2xl border border-border">
-            <table className="w-full border-collapse bg-white text-left text-sm">
-              <thead className="bg-muted text-xs uppercase tracking-wider text-secondary">
-                <tr>
-                  <th className="px-5 py-4">Código</th>
-                  <th className="px-5 py-4">Muestra</th>
-                  <th className="px-5 py-4">Tipo</th>
-                  <th className="px-5 py-4">Peso</th>
-                </tr>
-              </thead>
+          {activeSamples.length > 0 ? (
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-border">
+              <table className="w-full border-collapse bg-white text-left text-sm">
+                <thead className="bg-muted text-xs uppercase tracking-wider text-secondary">
+                  <tr>
+                    <th className="px-5 py-4">
+                      Código
+                    </th>
 
-              <tbody className="divide-y divide-border">
-                {samples.map((sample) => (
-                  <tr
-                    key={sample.code}
-                    className="transition hover:bg-background/60"
-                  >
-                    <td className="px-5 py-4 font-bold text-primary">
-                      {sample.code}
-                    </td>
+                    <th className="px-5 py-4">
+                      Muestra
+                    </th>
 
-                    <td className="px-5 py-4">
-                      <Link
-                        href={`/samples/${sample.code}`}
-                        className="font-bold text-primary transition hover:text-accent"
-                      >
-                        {sample.name}
-                      </Link>
-                    </td>
+                    <th className="px-5 py-4">
+                      Tipo
+                    </th>
 
-                    <td className="px-5 py-4 text-secondary">
-                      {sample.type}
-                    </td>
+                    <th className="px-5 py-4">
+                      Peso
+                    </th>
 
-                    <td className="px-5 py-4 text-secondary">
-                      {sample.weight}
-                    </td>
+                    <th className="px-5 py-4">
+                      Área
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody className="divide-y divide-border">
+                  {activeSamples.map(
+                    (sample) => (
+                      <tr
+                        key={sample.id}
+                        className="transition hover:bg-background/60"
+                      >
+                        <td className="px-5 py-4 font-bold text-primary">
+                          {sample.code}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <Link
+                            href={`/samples/${sample.id}`}
+                            className="font-bold text-primary transition hover:text-accent"
+                          >
+                            {sample.name}
+                          </Link>
+                        </td>
+
+                        <td className="px-5 py-4 text-secondary">
+                          {
+                            sample
+                              .materialType
+                              .name
+                          }
+                        </td>
+
+                        <td className="px-5 py-4 text-secondary">
+                          {formatNumber(
+                            sample.weightG
+                          )}{" "}
+                          g
+                        </td>
+
+                        <td className="px-5 py-4 text-secondary">
+                          {formatNumber(
+                            sample.areaCm2
+                          )}{" "}
+                          cm²
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-2xl border border-dashed border-border p-8 text-center">
+              <FlaskConical
+                size={28}
+                className="mx-auto text-secondary"
+              />
+
+              <p className="mt-3 font-bold text-primary">
+                No hay muestras almacenadas
+              </p>
+
+              <p className="mt-1 text-sm text-secondary">
+                Esta ubicación se encuentra
+                actualmente vacía.
+              </p>
+            </div>
+          )}
         </section>
       </div>
     </AppLayout>
+  );
+}
+
+// ----------------------------------------
+// HELPERS
+// ----------------------------------------
+
+function formatNumber(
+  value: number
+) {
+  return value.toLocaleString(
+    "es-CO",
+    {
+      maximumFractionDigits: 2,
+    }
   );
 }
 
@@ -281,25 +494,53 @@ function DetailMetric({
 function CapacityItem({
   label,
   value,
-  icon,
 }: {
   label: string;
   value: string;
-  icon?: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-white p-4">
-      <div className="flex items-center gap-2 text-secondary">
-        {icon}
-
-        <span className="text-xs font-bold">
-          {label}
-        </span>
-      </div>
+      <span className="text-xs font-bold text-secondary">
+        {label}
+      </span>
 
       <p className="mt-2 font-black text-primary">
         {value}
       </p>
+    </div>
+  );
+}
+
+function ConditionItem({
+  icon,
+  label,
+  enabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  enabled: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-border bg-white px-4 py-3">
+      <div className="flex items-center gap-3">
+        <span className="text-accent">
+          {icon}
+        </span>
+
+        <span className="text-sm font-bold text-primary">
+          {label}
+        </span>
+      </div>
+
+      <span
+        className={
+          enabled
+            ? "rounded-full bg-accent/10 px-3 py-1 text-xs font-bold text-accent"
+            : "rounded-full bg-muted px-3 py-1 text-xs font-bold text-secondary"
+        }
+      >
+        {enabled ? "Sí" : "No"}
+      </span>
     </div>
   );
 }

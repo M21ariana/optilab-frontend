@@ -1,6 +1,9 @@
 import Link from "next/link";
+
 import {
   Archive,
+  Biohazard,
+  LightbulbOff,
   Refrigerator,
   Warehouse,
 } from "lucide-react";
@@ -10,14 +13,26 @@ import { ProgressBar } from "./ProgressBar";
 
 export type LocationOverview = {
   id: string;
+
   code: string;
   name: string;
   type: string;
-  description: string;
-  allowedTypes: string[];
+  description: string | null;
+
+  maxAreaCm2: number | null;
+  usedAreaCm2: number;
+
   sampleCount: number;
-  capacity: number;
   occupancy: number;
+
+  supportsColdStorage: boolean;
+  supportsLightProtection: boolean;
+  supportsHazardous: boolean;
+
+  laboratory: {
+    id: string;
+    name: string;
+  };
 };
 
 type LocationOverviewCardProps = {
@@ -27,10 +42,14 @@ type LocationOverviewCardProps = {
 export function LocationOverviewCard({
   location,
 }: LocationOverviewCardProps) {
-  const availableSpaces = Math.max(
-    location.capacity - location.sampleCount,
-    0
-  );
+  const availableArea =
+    location.maxAreaCm2 !== null
+      ? Math.max(
+          location.maxAreaCm2 -
+            location.usedAreaCm2,
+          0
+        )
+      : null;
 
   return (
     <Link
@@ -38,10 +57,13 @@ export function LocationOverviewCard({
       className="group block rounded-3xl border border-border bg-surface p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-md"
     >
       {/* Header */}
+
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-            <LocationTypeIcon type={location.type} />
+            <LocationTypeIcon
+              type={location.type}
+            />
           </div>
 
           <div className="min-w-0">
@@ -60,64 +82,94 @@ export function LocationOverviewCard({
         </div>
 
         <div className="shrink-0">
-          <OccupancyBadge occupancy={location.occupancy} />
+          <OccupancyBadge
+            occupancy={location.occupancy}
+          />
         </div>
       </div>
 
-      {/* Description */}
-      <p className="mt-5 text-sm leading-6 text-secondary">
-        {location.description}
+      {/* Laboratory */}
+
+      <p className="mt-4 text-xs font-bold uppercase tracking-wide text-secondary">
+        {location.laboratory.name}
       </p>
 
+      {/* Description */}
+
+      {location.description && (
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-secondary">
+          {location.description}
+        </p>
+      )}
+
       {/* Occupancy */}
+
       <div className="mt-5">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs font-bold text-secondary">
-            Ocupación
+            Ocupación por área
           </p>
 
           <p className="text-xs font-black text-primary">
-            {location.occupancy}%
+            {location.occupancy.toFixed(1)}%
           </p>
         </div>
 
-        <ProgressBar occupancy={location.occupancy} />
+        <ProgressBar
+          occupancy={location.occupancy}
+        />
       </div>
 
       {/* Metrics */}
+
       <div className="mt-5 grid grid-cols-3 gap-4 border-t border-border pt-5">
         <CardMetric
-          value={location.sampleCount}
+          value={location.sampleCount.toString()}
           label="Muestras"
         />
 
         <CardMetric
-          value={availableSpaces}
-          label="Espacios libres"
+          value={`${Math.round(
+            location.usedAreaCm2
+          ).toLocaleString()} cm²`}
+          label="Área usada"
         />
 
         <CardMetric
-          value={location.capacity}
-          label="Capacidad"
+          value={
+            availableArea !== null
+              ? `${Math.round(
+                  availableArea
+                ).toLocaleString()} cm²`
+              : "—"
+          }
+          label="Área libre"
         />
       </div>
 
-      {/* Allowed sample types */}
-      <div className="mt-5">
-        <p className="text-xs font-bold text-secondary">
-          Tipos permitidos
-        </p>
+      {/* Storage capabilities */}
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          {location.allowedTypes.map((type) => (
-            <span
-              key={type}
-              className="rounded-full bg-accent/10 px-3 py-1 text-xs font-bold text-accent"
-            >
-              {type}
-            </span>
-          ))}
-        </div>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {location.supportsColdStorage && (
+          <CapabilityBadge
+            icon={<Refrigerator size={14} />}
+            label="Refrigerado"
+          />
+        )}
+
+        {location.supportsLightProtection && (
+          <CapabilityBadge
+            icon={<LightbulbOff size={14} />}
+            label="Protección de luz"
+          />
+        )}
+
+        {location.supportsHazardous && (
+          <CapabilityBadge
+            icon={<Biohazard size={14} />}
+            label="Peligrosos"
+          />
+        )}
       </div>
     </Link>
   );
@@ -127,12 +179,12 @@ function CardMetric({
   value,
   label,
 }: {
-  value: number;
+  value: string;
   label: string;
 }) {
   return (
     <div>
-      <p className="text-lg font-black text-primary">
+      <p className="text-sm font-black text-primary">
         {value}
       </p>
 
@@ -143,17 +195,33 @@ function CardMetric({
   );
 }
 
+function CapabilityBadge({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-bold text-accent">
+      {icon}
+      {label}
+    </span>
+  );
+}
+
 function LocationTypeIcon({
   type,
 }: {
   type: string;
 }) {
-  switch (type) {
-    case "Refrigerado":
-    case "Refrigerador":
+  switch (type.toLowerCase()) {
+    case "refrigerado":
+    case "refrigerador":
+    case "nevera":
       return <Refrigerator size={22} />;
 
-    case "Gabinete":
+    case "gabinete":
       return <Archive size={22} />;
 
     default:
